@@ -3,23 +3,228 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kalkulator Marży - Gadżety Reklamowe</title>
+    <title>Kalkulator Marży - BAS Kreacja</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
     <div id="root"></div>
-
     <script type="text/babel">
-        const { useState } = React;
+        const { useState, useEffect } = React;
 
         function MarginCalculator() {
+            // Stan produktów z nowymi funkcjami
             const [products, setProducts] = useState([
-                { id: 1, name: '', purchaseCost: '', customizationCost: '', shippingCost: '', targetMargin: 40 }
+                { 
+                    id: 1, 
+                    name: '', 
+                    purchaseCost: '', 
+                    customizationCost: '', 
+                    shippingCost: '', 
+                    targetMargin: 32, 
+                    images: [],
+                    imagePreviews: [],
+                    useUnitPrice: true,
+                    unitQuantity: 1,
+                    useQuantityTiers: false,
+                    quantityTiers: [
+                        { id: 1, quantity: 10, margin: 32 },
+                        { id: 2, quantity: 20, margin: 32 },
+                        { id: 3, quantity: 50, margin: 32 }
+                    ],
+                    selectedTier: null
+                }
             ]);
+            
+            const [companyLogo, setCompanyLogo] = useState(null);
+            const [companyLogoPreview, setCompanyLogoPreview] = useState('');
+            const [deliveryTime, setDeliveryTime] = useState('');
+            const [includeDeliveryTime, setIncludeDeliveryTime] = useState(false);
+            const [companyName, setCompanyName] = useState('BAS Kreacja');
+            const [companyAddress, setCompanyAddress] = useState('Żurawia 2/25 00-503 Warszawa');
+            const [companyPhone, setCompanyPhone] = useState('22 418 88 88');
+            const [companyEmail, setCompanyEmail] = useState('info@baskreacja.pl');
+            const [clientName, setClientName] = useState('');
+            const [showOfferSettings, setShowOfferSettings] = useState(false);
+            const [savedConfigurations, setSavedConfigurations] = useState([]);
+            const [showSavedConfigs, setShowSavedConfigs] = useState(false);
+            const [showSaveWorkingOfferDialog, setShowSaveWorkingOfferDialog] = useState(false);
+            const [workingOfferName, setWorkingOfferName] = useState('');
+            
+            // Stany dla biblioteki ofert
+            const [savedOffers, setSavedOffers] = useState([]);
+            const [showOffersLibrary, setShowOffersLibrary] = useState(false);
+            const [showSaveOfferDialog, setShowSaveOfferDialog] = useState(false);
+            const [offerName, setOfferName] = useState('');
+            const [sortField, setSortField] = useState('date');
+            const [sortDirection, setSortDirection] = useState('desc');
+            const [filterClient, setFilterClient] = useState('');
 
+            // NOWA FUNKCJA: Formatowanie kwot w stylu polskim
+            const formatCurrency = (amount) => {
+                return new Intl.NumberFormat('pl-PL', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                }).format(amount);
+            };
+
+            // Ładowanie zapisanych konfiguracji z localStorage
+            useEffect(() => {
+                const saved = localStorage.getItem('basKreacjaConfigs');
+                if (saved) {
+                    try {
+                        setSavedConfigurations(JSON.parse(saved));
+                    } catch (e) {
+                        console.error('Błąd wczytywania konfiguracji:', e);
+                    }
+                }
+                
+                // Ładowanie zapisanych ofert
+                const offers = localStorage.getItem('basKreacjaOffers');
+                if (offers) {
+                    try {
+                        setSavedOffers(JSON.parse(offers));
+                    } catch (e) {
+                        console.error('Błąd wczytywania ofert:', e);
+                    }
+                }
+            }, []);
+
+            // FUNKCJA 5: Zapisywanie i ładowanie konfiguracji
+            const saveConfiguration = () => {
+                const config = {
+                    id: Date.now(),
+                    date: new Date().toISOString(),
+                    configName: workingOfferName.trim() || clientName.trim() || 'Bez nazwy',
+                    clientName: clientName || '',
+                    products,
+                    companyName,
+                    companyAddress,
+                    companyPhone,
+                    companyEmail,
+                    deliveryTime,
+                    includeDeliveryTime
+                };
+                const updated = [config, ...savedConfigurations];
+                setSavedConfigurations(updated);
+                localStorage.setItem('basKreacjaConfigs', JSON.stringify(updated));
+                setShowSaveWorkingOfferDialog(false);
+                setWorkingOfferName('');
+                alert('✅ Oferta robocza została zapisana!');
+            };
+
+            const loadConfiguration = (config) => {
+                setProducts(config.products);
+                setClientName(config.clientName);
+                setCompanyName(config.companyName);
+                setCompanyAddress(config.companyAddress);
+                setCompanyPhone(config.companyPhone);
+                setCompanyEmail(config.companyEmail);
+                setDeliveryTime(config.deliveryTime);
+                setIncludeDeliveryTime(config.includeDeliveryTime);
+                setShowSavedConfigs(false);
+                alert('✅ Oferta robocza wczytana!');
+            };
+
+            const deleteConfiguration = (id) => {
+                if (confirm('Czy na pewno chcesz usunąć tę ofertę roboczą?')) {
+                    const updated = savedConfigurations.filter(c => c.id !== id);
+                    setSavedConfigurations(updated);
+                    localStorage.setItem('basKreacjaConfigs', JSON.stringify(updated));
+                }
+            };
+
+            // Funkcje zarządzania ofertami
+            const saveOffer = () => {
+                const offer = {
+                    id: Date.now(),
+                    date: new Date().toISOString(),
+                    offerName: offerName.trim() || clientName.trim() || 'Bez nazwy',
+                    clientName: clientName.trim() || 'Nie podano',
+                    products,
+                    companyName,
+                    companyAddress,
+                    companyPhone,
+                    companyEmail,
+                    deliveryTime,
+                    includeDeliveryTime,
+                    summary: calculateSummary()
+                };
+                
+                const updated = [offer, ...savedOffers];
+                setSavedOffers(updated);
+                localStorage.setItem('basKreacjaOffers', JSON.stringify(updated));
+            };
+
+            const loadOffer = (offer) => {
+                setProducts(offer.products);
+                setClientName(offer.clientName || '');
+                setCompanyName(offer.companyName);
+                setCompanyAddress(offer.companyAddress);
+                setCompanyPhone(offer.companyPhone);
+                setCompanyEmail(offer.companyEmail);
+                setDeliveryTime(offer.deliveryTime || '');
+                setIncludeDeliveryTime(offer.includeDeliveryTime || false);
+                setShowOffersLibrary(false);
+                alert('✅ Oferta wczytana!');
+            };
+
+            const deleteOffer = (id) => {
+                if (confirm('Czy na pewno chcesz usunąć tę ofertę?')) {
+                    const updated = savedOffers.filter(o => o.id !== id);
+                    setSavedOffers(updated);
+                    localStorage.setItem('basKreacjaOffers', JSON.stringify(updated));
+                }
+            };
+
+            const getUniqueClients = () => {
+                const clients = savedOffers.map(o => o.clientName);
+                return [...new Set(clients)].sort();
+            };
+
+            const getSortedOffers = () => {
+                let filtered = savedOffers;
+                
+                if (filterClient) {
+                    filtered = filtered.filter(o => o.clientName === filterClient);
+                }
+                
+                return filtered.sort((a, b) => {
+                    let aVal, bVal;
+                    
+                    switch(sortField) {
+                        case 'date':
+                            aVal = new Date(a.date);
+                            bVal = new Date(b.date);
+                            break;
+                        case 'client':
+                            aVal = a.clientName.toLowerCase();
+                            bVal = b.clientName.toLowerCase();
+                            break;
+                        case 'offer':
+                            aVal = a.offerName.toLowerCase();
+                            bVal = b.offerName.toLowerCase();
+                            break;
+                        case 'value':
+                            aVal = a.summary.totalSellingPrice;
+                            bVal = b.summary.totalSellingPrice;
+                            break;
+                        default:
+                            return 0;
+                    }
+                    
+                    if (sortDirection === 'asc') {
+                        return aVal > bVal ? 1 : -1;
+                    } else {
+                        return aVal < bVal ? 1 : -1;
+                    }
+                });
+            };
+
+            // Podstawowe funkcje zarządzania produktami
             const addProduct = () => {
                 setProducts([...products, {
                     id: Date.now(),
@@ -27,7 +232,18 @@
                     purchaseCost: '',
                     customizationCost: '',
                     shippingCost: '',
-                    targetMargin: 40
+                    targetMargin: 32,
+                    images: [],
+                    imagePreviews: [],
+                    useUnitPrice: true,
+                    unitQuantity: 1,
+                    useQuantityTiers: false,
+                    quantityTiers: [
+                        { id: 1, quantity: 10, margin: 32 },
+                        { id: 2, quantity: 20, margin: 32 },
+                        { id: 3, quantity: 50, margin: 32 }
+                    ],
+                    selectedTier: null
                 }]);
             };
 
@@ -43,43 +259,139 @@
                 ));
             };
 
+            // FUNKCJA 1: Obsługa wielu zdjęć dla produktu
+            const handleMultipleImageUpload = (id, files) => {
+                if (files && files.length > 0) {
+                    const fileArray = Array.from(files);
+                    const readers = fileArray.map(file => {
+                        return new Promise((resolve) => {
+                            const reader = new FileReader();
+                            reader.onloadend = () => resolve(reader.result);
+                            reader.readAsDataURL(file);
+                        });
+                    });
+
+                    Promise.all(readers).then(results => {
+                        const product = products.find(p => p.id === id);
+                        updateProduct(id, 'images', [...(product.images || []), ...fileArray]);
+                        updateProduct(id, 'imagePreviews', [...(product.imagePreviews || []), ...results]);
+                    });
+                }
+            };
+
+            const removeImage = (productId, imageIndex) => {
+                const product = products.find(p => p.id === productId);
+                const newImages = product.images.filter((_, i) => i !== imageIndex);
+                const newPreviews = product.imagePreviews.filter((_, i) => i !== imageIndex);
+                updateProduct(productId, 'images', newImages);
+                updateProduct(productId, 'imagePreviews', newPreviews);
+            };
+
+            // FUNKCJA 2: Zarządzanie wariantami ilościowymi (quantity tiers)
+            const addQuantityTier = (productId) => {
+                const product = products.find(p => p.id === productId);
+                const newTiers = [...product.quantityTiers, {
+                    id: Date.now(),
+                    quantity: '',
+                    margin: 32
+                }];
+                updateProduct(productId, 'quantityTiers', newTiers);
+            };
+
+            const removeQuantityTier = (productId, tierId) => {
+                const product = products.find(p => p.id === productId);
+                if (product.quantityTiers.length > 1) {
+                    const newTiers = product.quantityTiers.filter(t => t.id !== tierId);
+                    updateProduct(productId, 'quantityTiers', newTiers);
+                }
+            };
+
+            const updateQuantityTier = (productId, tierId, field, value) => {
+                const product = products.find(p => p.id === productId);
+                const newTiers = product.quantityTiers.map(t =>
+                    t.id === tierId ? { ...t, [field]: value } : t
+                );
+                updateProduct(productId, 'quantityTiers', newTiers);
+            };
+
+            const handleLogoUpload = (file) => {
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        setCompanyLogo(file);
+                        setCompanyLogoPreview(reader.result);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            // FUNKCJA 3: Obliczenia z ceną jednostkową
             const calculateResults = (product) => {
                 const purchase = parseFloat(product.purchaseCost) || 0;
                 const customization = parseFloat(product.customizationCost) || 0;
                 const shipping = parseFloat(product.shippingCost) || 0;
                 const margin = parseFloat(product.targetMargin) || 0;
+                const quantity = product.useUnitPrice ? (parseFloat(product.unitQuantity) || 1) : 1;
 
-                const totalCost = purchase + customization + shipping;
+                // POPRAWKA: koszt jednostkowy (bez wysyłki), wysyłka dodawana jednorazowo
+                const unitCost = purchase + customization;
+                const totalCost = (unitCost * quantity) + shipping; // wysyłka jednorazowa!
                 const sellingPrice = margin > 0 && margin < 100 
                     ? totalCost / (1 - margin / 100) 
                     : totalCost;
                 const profit = sellingPrice - totalCost;
                 const multiplier = totalCost > 0 ? sellingPrice / totalCost : 0;
                 const markup = totalCost > 0 ? ((sellingPrice - totalCost) / totalCost) * 100 : 0;
+                const pricePerUnit = quantity > 0 ? sellingPrice / quantity : 0;
 
-                return {
-                    totalCost,
-                    sellingPrice,
-                    profit,
-                    multiplier,
-                    markup
-                };
+                return { totalCost, sellingPrice, profit, multiplier, markup, pricePerUnit, quantity };
+            };
+
+            const calculateTierResults = (product, tier) => {
+                const purchase = parseFloat(product.purchaseCost) || 0;
+                const customization = parseFloat(product.customizationCost) || 0;
+                const shipping = parseFloat(product.shippingCost) || 0;
+                const margin = parseFloat(tier.margin) || 0;
+                const quantity = parseFloat(tier.quantity) || 1;
+
+                // POPRAWKA: koszt jednostkowy (bez wysyłki), wysyłka dodawana jednorazowo
+                const unitCost = purchase + customization;
+                const totalCost = (unitCost * quantity) + shipping; // wysyłka jednorazowa!
+                const sellingPrice = margin > 0 && margin < 100 
+                    ? totalCost / (1 - margin / 100) 
+                    : totalCost;
+                const pricePerUnit = sellingPrice / quantity;
+
+                return { totalCost, sellingPrice, pricePerUnit, quantity };
+            };
+
+            // POPRAWIONA FUNKCJA: Obliczanie podsumowania
+            const calculateSummary = () => {
+                let totalCost = 0, totalSellingPrice = 0, totalProfit = 0, validProducts = 0;
+
+                products.forEach(product => {
+                    if (!product.useQuantityTiers) {
+                        // Dla zwykłych produktów
+                        const results = calculateResults(product);
+                        if (results.totalCost > 0) {
+                            totalCost += results.totalCost;
+                            totalSellingPrice += results.sellingPrice;
+                            totalProfit += results.profit;
+                            validProducts++;
+                        }
+                    }
+                    // Dla produktów z tierami - nie sumujemy w podsumowaniu
+                });
+
+                const averageMargin = totalSellingPrice > 0 
+                    ? ((totalSellingPrice - totalCost) / totalSellingPrice) * 100 
+                    : 0;
+
+                return { totalCost, totalSellingPrice, totalProfit, averageMargin, validProducts };
             };
 
             const exportToCSV = () => {
-                const headers = [
-                    'Nazwa produktu',
-                    'Koszt zakupu (zł)',
-                    'Koszt personalizacji (zł)',
-                    'Koszt wysyłki (zł)',
-                    'Koszty całkowite (zł)',
-                    'Docelowa marża (%)',
-                    'Cena sprzedaży (zł)',
-                    'Zysk (zł)',
-                    'Mnożnik',
-                    'Narzut (%)'
-                ];
-
+                const headers = ['Nazwa produktu', 'Koszt zakupu (zł)', 'Koszt personalizacji (zł)', 'Koszt wysyłki (zł)', 'Koszty całkowite (zł)', 'Docelowa marża (%)', 'Cena sprzedaży (zł)', 'Zysk (zł)', 'Mnożnik', 'Narzut (%)'];
                 const rows = products.map(product => {
                     const results = calculateResults(product);
                     return [
@@ -95,18 +407,355 @@
                         results.markup.toFixed(2)
                     ];
                 });
-
-                const csvContent = [
-                    headers.join(';'),
-                    ...rows.map(row => row.join(';'))
-                ].join('\n');
-
+                const csvContent = [headers.join(';'), ...rows.map(row => row.join(';'))].join('\n');
                 const BOM = '\uFEFF';
                 const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
                 link.download = `kalkulator_marzy_${new Date().toISOString().split('T')[0]}.csv`;
                 link.click();
+            };
+
+            // FUNKCJA 4: POPRAWIONE GENEROWANIE PDF
+            const generatePDF = async () => {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({
+                    compress: true
+                });
+                
+                // Funkcja pomocnicza do konwersji polskich znaków (ROZSZERZONA)
+                const fixPolishChars = (text) => {
+                    if (!text) return '';
+                    const polishMap = {
+                        'ą': 'a', 'ć': 'c', 'ę': 'e', 'ł': 'l', 'ń': 'n', 
+                        'ó': 'o', 'ś': 's', 'ź': 'z', 'ż': 'z',
+                        'Ą': 'A', 'Ć': 'C', 'Ę': 'E', 'Ł': 'L', 'Ń': 'N',
+                        'Ó': 'O', 'Ś': 'S', 'Ź': 'Z', 'Ż': 'Z'
+                    };
+                    return String(text).replace(/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/g, char => polishMap[char] || char);
+                };
+                
+                const pageWidth = doc.internal.pageSize.getWidth();
+                const pageHeight = doc.internal.pageSize.getHeight();
+                const contentWidth = pageWidth - 40; // Szerokość treści (marginesy 20px z każdej strony)
+                let yPos = 10;
+
+                // Elegancka czcionka
+                doc.setFont('helvetica');
+
+                // Logo firmy klienta w prawym górnym rogu
+                if (companyLogoPreview) {
+                    try { 
+                        doc.addImage(companyLogoPreview, 'PNG', pageWidth - 30, 8, 16, 16); 
+                    } catch (e) { 
+                        console.error('Błąd dodawania logo firmy:', e); 
+                    }
+                }
+
+                yPos = 30;
+
+                // Elegancki nagłówek
+                doc.setFontSize(22);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(41, 98, 255);
+                doc.text(fixPolishChars('BAS KREACJA'), 20, yPos);
+                yPos += 8;
+                doc.setFontSize(16);
+                doc.setTextColor(100, 100, 100);
+                doc.setFont('helvetica', 'normal');
+                doc.text(fixPolishChars('OFERTA HANDLOWA'), 20, yPos);
+                yPos += 15;
+
+                // Dane firmy
+                if (companyName || companyAddress || companyPhone || companyEmail) {
+                    doc.setFontSize(9);
+                    doc.setTextColor(80, 80, 80);
+                    doc.setFont('helvetica', 'normal');
+                    if (companyName) { doc.text(fixPolishChars(companyName), 20, yPos); yPos += 4; }
+                    if (companyAddress) { doc.text(fixPolishChars(companyAddress), 20, yPos); yPos += 4; }
+                    if (companyPhone) { doc.text(fixPolishChars(`Tel: ${companyPhone}`), 20, yPos); yPos += 4; }
+                    if (companyEmail) { doc.text(fixPolishChars(`Email: ${companyEmail}`), 20, yPos); yPos += 4; }
+                    yPos += 5;
+                }
+
+                // Linia oddzielająca (POPRAWIONA SZEROKOŚĆ)
+                doc.setDrawColor(41, 98, 255);
+                doc.setLineWidth(0.5);
+                doc.line(20, yPos, pageWidth - 20, yPos);
+                yPos += 8;
+
+                // Klient i data
+                doc.setFontSize(10);
+                doc.setTextColor(0, 0, 0);
+                doc.setFont('helvetica', 'bold');
+                if (clientName) {
+                    doc.text(fixPolishChars('Przygotowano dla: '), 20, yPos);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(fixPolishChars(clientName), 52, yPos);
+                    yPos += 6;
+                }
+
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(100, 100, 100);
+                doc.setFontSize(9);
+                doc.text(fixPolishChars(`Data wystawienia: ${new Date().toLocaleDateString('pl-PL')}`), 20, yPos);
+                yPos += 12;
+
+                // Produkty
+                doc.setFontSize(13);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(41, 98, 255);
+                doc.text(fixPolishChars('Oferowane produkty'), 20, yPos);
+                yPos += 8;
+
+                for (let i = 0; i < products.length; i++) {
+                    const product = products[i];
+                    
+                    // Sprawdź czy starczy miejsca na następny produkt
+                    if (yPos > pageHeight - 100) {
+                        doc.addPage();
+                        yPos = 20;
+                    }
+
+                    // POPRAWIONY LAYOUT: Flexbox-style
+                    const hasImages = product.imagePreviews && product.imagePreviews.length > 0;
+                    const imagesWidth = hasImages ? 90 : 0; // Szerokość sekcji ze zdjęciami
+                    const textStartX = 20 + imagesWidth + (hasImages ? 10 : 0); // Tekst zaczyna się po zdjęciach + margines
+                    const textWidth = contentWidth - imagesWidth - (hasImages ? 10 : 0);
+                    
+                    // Oblicz wysokość produktu
+                    let productHeight = 35;
+                    if (product.useQuantityTiers) {
+                        const validTiers = product.quantityTiers.filter(t => t.quantity);
+                        productHeight = Math.max(50, 20 + (validTiers.length * 6));
+                    }
+                    
+                    // Box produktu (POPRAWIONA WYSOKOŚĆ)
+                    doc.setFillColor(248, 250, 252);
+                    doc.setDrawColor(226, 232, 240);
+                    doc.setLineWidth(0.3);
+                    doc.roundedRect(15, yPos - 5, contentWidth + 10, productHeight, 2, 2, 'FD');
+
+                    // Rysowanie miniatur (POPRAWIONE ODSTĘPY)
+                    if (hasImages) {
+                        const maxImages = Math.min(3, product.imagePreviews.length);
+                        const thumbSize = 25;
+                        const thumbGap = 3;
+                        
+                        for (let imgIndex = 0; imgIndex < maxImages; imgIndex++) {
+                            try {
+                                const imgX = 20 + (imgIndex * (thumbSize + thumbGap));
+                                doc.addImage(product.imagePreviews[imgIndex], 'PNG', imgX, yPos, thumbSize, thumbSize);
+                            } catch (e) {
+                                console.error('Błąd dodawania zdjęcia:', e);
+                            }
+                        }
+                    }
+
+                    // Nazwa produktu (POPRAWIONE - bez kolizji)
+                    doc.setFontSize(11);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(30, 41, 59);
+                    const productName = fixPolishChars(product.name || `Produkt ${i + 1}`);
+                    
+                    // Łamanie długich nazw
+                    const nameLines = doc.splitTextToSize(productName, textWidth);
+                    nameLines.forEach((line, idx) => {
+                        doc.text(line, textStartX, yPos + 5 + (idx * 5));
+                    });
+                    
+                    const nameHeight = nameLines.length * 5;
+
+                    // Warianty cenowe lub pojedyncza cena
+                    if (product.useQuantityTiers) {
+                        doc.setFontSize(9);
+                        doc.setFont('helvetica', 'normal');
+                        doc.setTextColor(71, 85, 105);
+                        let tierY = yPos + 5 + nameHeight + 3;
+                        
+                        product.quantityTiers.forEach((tier, tierIndex) => {
+                            if (tier.quantity) {
+                                const tierResults = calculateTierResults(product, tier);
+                                
+                                // Wszystkie tiery pokazane jednakowo
+                                doc.setFont('helvetica', 'normal');
+                                doc.setTextColor(71, 85, 105);
+                                
+                                // POPRAWIONE FORMATOWANIE KWOT
+                                const priceText = `${tier.quantity} szt. - ${formatCurrency(tierResults.pricePerUnit)} zl/szt. (lacznie: ${formatCurrency(tierResults.sellingPrice)} zl)`;
+                                doc.text(fixPolishChars(priceText), textStartX, tierY);
+                                tierY += 5;
+                            }
+                        });
+                        yPos += productHeight;
+                    } else {
+                        const results = calculateResults(product);
+                        doc.setFontSize(14);
+                        doc.setFont('helvetica', 'bold');
+                        doc.setTextColor(34, 197, 94);
+                        
+                        if (product.useUnitPrice && results.quantity > 1) {
+                            // POPRAWIONE FORMATOWANIE
+                            doc.text(fixPolishChars(`${formatCurrency(results.pricePerUnit)} zl/szt.`), textStartX, yPos + 15 + nameHeight);
+                            doc.setFontSize(10);
+                            doc.setTextColor(71, 85, 105);
+                            doc.text(fixPolishChars(`(${results.quantity} szt. = ${formatCurrency(results.sellingPrice)} zl)`), textStartX, yPos + 22 + nameHeight);
+                        } else {
+                            doc.text(fixPolishChars(`${formatCurrency(results.sellingPrice)} zl netto`), textStartX, yPos + 15 + nameHeight);
+                        }
+                        yPos += productHeight;
+                    }
+                    
+                    yPos += 5; // Odstęp między produktami
+                }
+
+                // Podsumowanie
+                if (yPos > pageHeight - 60) {
+                    doc.addPage();
+                    yPos = 20;
+                }
+
+                const summary = calculateSummary();
+                
+                yPos += 10;
+                doc.setDrawColor(41, 98, 255);
+                doc.setLineWidth(0.5);
+                doc.line(20, yPos, pageWidth - 20, yPos);
+                yPos += 10;
+
+                doc.setFontSize(13);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(41, 98, 255);
+                doc.text(fixPolishChars('Podsumowanie oferty'), 20, yPos);
+                yPos += 8;
+
+                doc.setFontSize(11);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(30, 41, 59);
+                doc.text(fixPolishChars(`Liczba pozycji: ${summary.validProducts}`), 20, yPos);
+                yPos += 7;
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(13);
+                doc.setTextColor(34, 197, 94);
+                // POPRAWIONE FORMATOWANIE
+                doc.text(fixPolishChars(`Wartosc calkowita netto: ${formatCurrency(summary.totalSellingPrice)} zl`), 20, yPos);
+                yPos += 12;
+
+                // Czas realizacji
+                if (includeDeliveryTime && deliveryTime) {
+                    doc.setFontSize(10);
+                    doc.setFont('helvetica', 'italic');
+                    doc.setTextColor(100, 100, 100);
+                    doc.text(fixPolishChars(`Orientacyjny czas realizacji: ${deliveryTime}`), 20, yPos);
+                    yPos += 10;
+                }
+
+                // ========== GALERIA ZDJĘĆ PRODUKTÓW ==========
+                // Zbierz wszystkie zdjęcia
+                const allImages = [];
+                products.forEach((product, productIndex) => {
+                    if (product.imagePreviews && product.imagePreviews.length > 0) {
+                        product.imagePreviews.forEach((image, imageIndex) => {
+                            allImages.push({
+                                image: image,
+                                productName: product.name || `Produkt ${productIndex + 1}`,
+                                imageIndex: imageIndex + 1
+                            });
+                        });
+                    }
+                });
+
+                if (allImages.length > 0) {
+                    // Sprawdź czy jest miejsce na nagłówek galerii
+                    if (yPos > pageHeight - 40) {
+                        doc.addPage();
+                        yPos = 30;
+                    }
+
+                    // Nagłówek galerii
+                    yPos += 10;
+                    doc.setFontSize(13);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(41, 98, 255);
+                    doc.text(fixPolishChars('Galeria produktow'), 20, yPos);
+                    yPos += 10;
+
+                    // Układ: 2 kolumny × 3 rzędy = 6 zdjęć na stronę
+                    const imageSize = 80; // 80mm = około 300px
+                    const spacing = 10;
+                    const leftColumnX = 20;
+                    const rightColumnX = 115;
+                    
+                    let currentColumn = 0; // 0 = lewa, 1 = prawa
+                    let imagesOnCurrentPage = 0;
+
+                    allImages.forEach((item, index) => {
+                        // Jeśli 6 zdjęć już na stronie, dodaj nową stronę
+                        if (imagesOnCurrentPage >= 6) {
+                            doc.addPage();
+                            yPos = 30;
+                            currentColumn = 0;
+                            imagesOnCurrentPage = 0;
+                        }
+
+                        // Jeśli koniec rzędu (co 2 zdjęcia), przejdź do nowego rzędu
+                        if (currentColumn === 0 && imagesOnCurrentPage > 0 && imagesOnCurrentPage % 2 === 0) {
+                            yPos += imageSize + spacing + 5;
+                        }
+
+                        // Ustal pozycję X w zależności od kolumny
+                        const currentX = currentColumn === 0 ? leftColumnX : rightColumnX;
+
+                        // Tytuł zdjęcia - skrócony, nad zdjęciem
+                        doc.setFontSize(8);
+                        doc.setFont('helvetica', 'bold');
+                        doc.setTextColor(30, 41, 59);
+                        const titleText = fixPolishChars(`${item.productName.substring(0, 25)}${item.productName.length > 25 ? '...' : ''}`);
+                        doc.text(titleText, currentX, yPos);
+
+                        try {
+                            // Ramka wokół zdjęcia
+                            doc.setDrawColor(200, 200, 200);
+                            doc.setLineWidth(0.5);
+                            doc.rect(currentX - 1, yPos + 2 - 1, imageSize + 2, imageSize + 2, 'S');
+
+                            // Zdjęcie
+                            doc.addImage(item.image, 'JPEG', currentX, yPos + 2, imageSize, imageSize, undefined, 'FAST');
+
+                        } catch (e) {
+                            console.error('Błąd dodawania zdjęcia:', e);
+                            doc.setFontSize(8);
+                            doc.setTextColor(220, 38, 38);
+                            doc.text(fixPolishChars('Blad'), currentX, yPos + 20);
+                        }
+
+                        // Przełącz kolumnę
+                        currentColumn = (currentColumn + 1) % 2;
+                        imagesOnCurrentPage++;
+
+                        // Jeśli to ostatnie zdjęcie w rzędzie (prawa kolumna), nie zmieniaj yPos tutaj
+                        // yPos zmieni się na początku kolejnej iteracji
+                    });
+
+                    // Przejdź poniżej ostatniego zdjęcia
+                    if (imagesOnCurrentPage > 0) {
+                        yPos += imageSize + spacing + 5;
+                    }
+                }
+
+                // Elegancka stopka
+                yPos = pageHeight - 25;
+                doc.setFillColor(248, 250, 252);
+                doc.rect(0, yPos - 5, pageWidth, 30, 'F');
+                doc.setFontSize(8);
+                doc.setFont('helvetica', 'italic');
+                doc.setTextColor(120, 120, 120);
+                doc.text(fixPolishChars('Oferta wazna 30 dni od daty wystawienia'), 20, yPos + 2);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(41, 98, 255);
+                doc.text(fixPolishChars('Dziekujemy za zainteresowanie nasza oferta!'), 20, yPos + 8);
+
+                doc.save(`oferta_BASKreacja_${fixPolishChars(clientName) || 'klient'}_${new Date().toISOString().split('T')[0]}.pdf`);
             };
 
             const presetMargins = [
@@ -120,46 +769,243 @@
                 <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 md:p-8">
                     <div className="max-w-6xl mx-auto">
                         <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8">
-                            <div className="flex items-center gap-3 mb-6">
-                                <div className="bg-indigo-600 p-3 rounded-xl">
-                                    <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                                    </svg>
-                                </div>
-                                <div>
-                                    <h1 className="text-3xl font-bold text-gray-800">Kalkulator Marży</h1>
-                                    <p className="text-gray-600">Oblicz cenę sprzedaży na podstawie docelowej marży</p>
-                                </div>
-                            </div>
-
-                            <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6 rounded">
-                                <div className="flex items-start gap-2">
-                                    <svg className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                                    </svg>
-                                    <div className="text-sm text-blue-800">
-                                        <strong>Formuła:</strong> Cena sprzedaży = Koszty całkowite / (1 - Marża% / 100)
-                                        <br />
-                                        <strong>Przykład:</strong> Koszty 100 zł, marża 40% → Cena = 100 / 0.6 = 166,67 zł
+                            {/* Nagłówek z przyciskami zapisu */}
+                            <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-indigo-600 p-3 rounded-xl">
+                                        <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h1 className="text-3xl font-bold text-gray-800">Kalkulator Marży - BAS Kreacja</h1>
+                                        <p className="text-gray-600">Oblicz cenę sprzedaży i generuj profesjonalne oferty PDF</p>
                                     </div>
                                 </div>
+                                <div className="flex gap-3 flex-wrap">
+                                    <button
+                                        onClick={() => setShowOffersLibrary(!showOffersLibrary)}
+                                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+                                        </svg>
+                                        Biblioteka ofert ({savedOffers.length})
+                                    </button>
+                                </div>
                             </div>
 
+                            {/* Dialog zapisywania oferty roboczej */}
+                            {showSaveWorkingOfferDialog && (
+                                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                                    <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-2xl">
+                                        <h3 className="text-xl font-bold text-gray-800 mb-4">💾 Zapisz ofertę roboczą</h3>
+                                        <p className="text-sm text-gray-600 mb-4">
+                                            Nadaj nazwę tej ofercie roboczej, aby łatwo ją później odnaleźć.
+                                        </p>
+                                        <div className="mb-4">
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                Nazwa oferty roboczej
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={workingOfferName}
+                                                onChange={(e) => setWorkingOfferName(e.target.value)}
+                                                placeholder={clientName ? `Oferta dla ${clientName}` : "np. Projekt Q1 2026"}
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                onKeyPress={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        saveConfiguration();
+                                                    }
+                                                }}
+                                                autoFocus
+                                            />
+                                            {clientName && (
+                                                <p className="text-xs text-gray-500 mt-1">
+                                                    Klient: {clientName}
+                                                </p>
+                                            )}
+                                        </div>
+                                        <div className="flex gap-3 justify-end">
+                                            <button
+                                                onClick={() => {
+                                                    setShowSaveWorkingOfferDialog(false);
+                                                    setWorkingOfferName('');
+                                                }}
+                                                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                                            >
+                                                Anuluj
+                                            </button>
+                                            <button
+                                                onClick={saveConfiguration}
+                                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                            >
+                                                Zapisz
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Dialog zapisywania oferty */}
+                            {showSaveOfferDialog && (
+                                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                                    <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-2xl">
+                                        <h3 className="text-xl font-bold text-gray-800 mb-4">💾 Pobierz ofertę PDF</h3>
+                                        <p className="text-sm text-gray-600 mb-4">
+                                            Czy chcesz zapisać tę ofertę w bibliotece?
+                                        </p>
+                                        <div className="mb-4">
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                Nazwa oferty (opcjonalnie)
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={offerName}
+                                                onChange={(e) => setOfferName(e.target.value)}
+                                                placeholder={clientName ? `Oferta dla ${clientName}` : "np. Oferta styczeń 2026"}
+                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                                                autoFocus
+                                            />
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                Klient: {clientName || 'Nie podano'}
+                                            </p>
+                                        </div>
+                                        <div className="flex flex-col gap-3">
+                                            <button
+                                                onClick={() => {
+                                                    saveOffer();
+                                                    generatePDF();
+                                                    setShowSaveOfferDialog(false);
+                                                    setOfferName('');
+                                                    alert('✅ Oferta zapisana i PDF pobrane!');
+                                                }}
+                                                className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
+                                            >
+                                                ✅ Zapisz i pobierz PDF
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    generatePDF();
+                                                    setShowSaveOfferDialog(false);
+                                                    setOfferName('');
+                                                }}
+                                                className="w-full px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium"
+                                            >
+                                                📥 Tylko pobierz PDF (bez zapisywania)
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setShowSaveOfferDialog(false);
+                                                    setOfferName('');
+                                                }}
+                                                className="w-full px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                                            >
+                                                Anuluj
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Biblioteka ofert */}
+                            {showOffersLibrary && (
+                                <div className="mb-6 bg-white border-2 border-green-200 rounded-xl p-6 shadow-lg">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="text-xl font-bold text-gray-800">📚 Biblioteka ofert</h3>
+                                        <button onClick={() => setShowOffersLibrary(false)} className="text-gray-500 hover:text-gray-700">
+                                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                    
+                                    {savedOffers.length === 0 ? (
+                                        <p className="text-gray-600 text-center py-8">
+                                            Brak zapisanych ofert. Wygeneruj ofertę PDF i zapisz ją.
+                                        </p>
+                                    ) : (
+                                        <>
+                                            <div className="grid md:grid-cols-3 gap-4 mb-4">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">Filtruj po kliencie</label>
+                                                    <select value={filterClient} onChange={(e) => setFilterClient(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm">
+                                                        <option value="">Wszyscy klienci</option>
+                                                        {getUniqueClients().map(client => (
+                                                            <option key={client} value={client}>{client}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">Sortuj według</label>
+                                                    <select value={sortField} onChange={(e) => setSortField(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm">
+                                                        <option value="date">Daty</option>
+                                                        <option value="client">Klienta</option>
+                                                        <option value="offer">Nazwy oferty</option>
+                                                        <option value="value">Wartości</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">Kolejność</label>
+                                                    <select value={sortDirection} onChange={(e) => setSortDirection(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm">
+                                                        <option value="desc">Malejąco</option>
+                                                        <option value="asc">Rosnąco</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="space-y-3 max-h-96 overflow-y-auto">
+                                                {getSortedOffers().map(offer => (
+                                                    <div key={offer.id} className="bg-gray-50 border rounded-lg p-4 hover:shadow-md transition-shadow">
+                                                        <div className="flex items-start justify-between gap-4">
+                                                            <div className="flex-1 min-w-0">
+                                                                <h4 className="font-semibold text-gray-800 truncate">{offer.offerName}</h4>
+                                                                <p className="text-sm text-gray-600 mt-1">
+                                                                    <span className="font-medium">Klient:</span> {offer.clientName}
+                                                                </p>
+                                                                <p className="text-xs text-gray-500 mt-1">
+                                                                    {new Date(offer.date).toLocaleString('pl-PL')} • 
+                                                                    {offer.products?.length || 0} produktów • 
+                                                                    <span className="font-semibold text-green-600">
+                                                                        {formatCurrency(offer.summary.totalSellingPrice)} zł
+                                                                    </span>
+                                                                </p>
+                                                            </div>
+                                                            <div className="flex gap-2 flex-shrink-0">
+                                                                <button
+                                                                    onClick={() => loadOffer(offer)}
+                                                                    className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+                                                                    title="Wczytaj ofertę"
+                                                                >
+                                                                    Wczytaj
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => deleteOffer(offer.id)}
+                                                                    className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
+                                                                    title="Usuń ofertę"
+                                                                >
+                                                                    Usuń
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Lista produktów */}
                             <div className="space-y-6">
                                 {products.map((product, index) => {
                                     const results = calculateResults(product);
-
                                     return (
                                         <div key={product.id} className="border border-gray-200 rounded-xl p-6 bg-gray-50">
                                             <div className="flex justify-between items-center mb-4">
-                                                <h3 className="text-lg font-semibold text-gray-700">
-                                                    Produkt {index + 1}
-                                                </h3>
+                                                <h3 className="text-lg font-semibold text-gray-700">Produkt {index + 1}</h3>
                                                 {products.length > 1 && (
-                                                    <button
-                                                        onClick={() => removeProduct(product.id)}
-                                                        className="text-red-500 hover:text-red-700 p-2 rounded-lg hover:bg-red-50 transition-colors"
-                                                    >
+                                                    <button onClick={() => removeProduct(product.id)} className="text-red-500 hover:text-red-700 p-2 rounded-lg hover:bg-red-50 transition-colors">
                                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                                         </svg>
@@ -168,127 +1014,212 @@
                                             </div>
 
                                             <div className="grid md:grid-cols-2 gap-4 mb-4">
+                                                {/* Nazwa produktu */}
                                                 <div className="md:col-span-2">
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                        Nazwa produktu
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={product.name}
-                                                        onChange={(e) => updateProduct(product.id, 'name', e.target.value)}
-                                                        placeholder="np. Kubek ceramiczny z logo"
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                                                    />
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Nazwa produktu</label>
+                                                    <input type="text" value={product.name} onChange={(e) => updateProduct(product.id, 'name', e.target.value)} placeholder="np. Kubek ceramiczny z logo" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
                                                 </div>
 
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                        Koszt zakupu (zł)
-                                                    </label>
-                                                    <input
-                                                        type="number"
-                                                        step="0.01"
-                                                        value={product.purchaseCost}
-                                                        onChange={(e) => updateProduct(product.id, 'purchaseCost', e.target.value)}
-                                                        placeholder="0.00"
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                                                    />
+                                                {/* FUNKCJA 1: Wiele zdjęć */}
+                                                <div className="md:col-span-2">
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Zdjęcia produktu (można dodać wiele)</label>
+                                                    <input type="file" accept="image/*" multiple onChange={(e) => handleMultipleImageUpload(product.id, e.target.files)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                                                    {product.imagePreviews && product.imagePreviews.length > 0 && (
+                                                        <div className="mt-2 flex gap-2 flex-wrap">
+                                                            {product.imagePreviews.map((preview, imgIndex) => (
+                                                                <div key={imgIndex} className="relative">
+                                                                    <img src={preview} alt={`Zdjęcie ${imgIndex + 1}`} className="h-24 w-24 object-cover rounded-lg border-2 border-indigo-200" />
+                                                                    <button
+                                                                        onClick={() => removeImage(product.id, imgIndex)}
+                                                                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                                                                    >
+                                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                                        </svg>
+                                                                    </button>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
 
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                        Koszt personalizacji (zł)
+                                                {/* FUNKCJA 3: Checkbox - cena jednostkowa */}
+                                                <div className="md:col-span-2">
+                                                    <label className="flex items-center gap-2 cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={!product.useUnitPrice}
+                                                            onChange={(e) => updateProduct(product.id, 'useUnitPrice', !e.target.checked)}
+                                                            className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                                        />
+                                                        <span className="text-sm font-medium text-gray-700">Koszt sumaryczny</span>
                                                     </label>
-                                                    <input
-                                                        type="number"
-                                                        step="0.01"
-                                                        value={product.customizationCost}
-                                                        onChange={(e) => updateProduct(product.id, 'customizationCost', e.target.value)}
-                                                        placeholder="0.00"
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                                                    />
                                                 </div>
 
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                        Koszt wysyłki (zł)
-                                                    </label>
-                                                    <input
-                                                        type="number"
-                                                        step="0.01"
-                                                        value={product.shippingCost}
-                                                        onChange={(e) => updateProduct(product.id, 'shippingCost', e.target.value)}
-                                                        placeholder="0.00"
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                                                    />
-                                                </div>
-
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                        Docelowa marża (%)
-                                                    </label>
-                                                    <input
-                                                        type="number"
-                                                        step="1"
-                                                        min="0"
-                                                        max="99"
-                                                        value={product.targetMargin}
-                                                        onChange={(e) => updateProduct(product.id, 'targetMargin', e.target.value)}
-                                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                                                    />
-                                                    <div className="flex gap-2 mt-2 flex-wrap">
-                                                        {presetMargins.map(preset => (
-                                                            <button
-                                                                key={preset.label}
-                                                                onClick={() => updateProduct(product.id, 'targetMargin', preset.value)}
-                                                                className="text-xs px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full hover:bg-indigo-200 transition-colors"
-                                                            >
-                                                                {preset.label} {preset.value > 0 && `(${preset.value}%)`}
-                                                            </button>
-                                                        ))}
+                                                {/* Pole ilości */}
+                                                {product.useUnitPrice && (
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Ilość (szt.)</label>
+                                                        <input
+                                                            type="number"
+                                                            step="1"
+                                                            min="1"
+                                                            value={product.unitQuantity}
+                                                            onChange={(e) => updateProduct(product.id, 'unitQuantity', e.target.value)}
+                                                            placeholder="10"
+                                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                                        />
                                                     </div>
+                                                )}
+
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Koszt zakupu {product.useUnitPrice ? 'za szt.' : 'sumaryczny'} (zł)</label>
+                                                    <input type="number" step="0.01" value={product.purchaseCost} onChange={(e) => updateProduct(product.id, 'purchaseCost', e.target.value)} placeholder="0.00" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
                                                 </div>
+
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Koszt personalizacji {product.useUnitPrice ? 'za szt.' : 'sumaryczny'} (zł)</label>
+                                                    <input type="number" step="0.01" value={product.customizationCost} onChange={(e) => updateProduct(product.id, 'customizationCost', e.target.value)} placeholder="0.00" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Koszt wysyłki (zł)</label>
+                                                    <input type="number" step="0.01" value={product.shippingCost} onChange={(e) => updateProduct(product.id, 'shippingCost', e.target.value)} placeholder="0.00" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                                                </div>
+
+                                                {/* Checkbox wariantów ilościowych */}
+                                                <div className="md:col-span-2">
+                                                    <label className="flex items-center gap-2 cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={product.useQuantityTiers}
+                                                            onChange={(e) => updateProduct(product.id, 'useQuantityTiers', e.target.checked)}
+                                                            className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                                        />
+                                                        <span className="text-sm font-medium text-gray-700">Warianty ilościowe</span>
+                                                    </label>
+                                                </div>
+
+                                                {/* Warianty ilościowe - TABELA */}
+                                                {product.useQuantityTiers ? (
+                                                    <div className="md:col-span-2 bg-purple-50 rounded-lg p-4 border border-purple-200">
+                                                        <div className="flex justify-between items-center mb-3">
+                                                            <h5 className="font-semibold text-gray-700">Warianty ilościowe</h5>
+                                                            <button
+                                                                onClick={() => addQuantityTier(product.id)}
+                                                                className="text-xs px-3 py-1 bg-purple-600 text-white rounded-full hover:bg-purple-700 transition-colors"
+                                                            >
+                                                                + Dodaj wariant
+                                                            </button>
+                                                        </div>
+                                                        
+                                                        {/* Nagłówki tabeli */}
+                                                        <div className="grid grid-cols-12 gap-2 mb-2 px-3 py-2 bg-purple-100 rounded font-semibold text-xs text-gray-700">
+                                                            <div className="col-span-3">Szt.</div>
+                                                            <div className="col-span-2">Marża</div>
+                                                            <div className="col-span-3">Cena za szt.</div>
+                                                            <div className="col-span-3">Wartość całkowita netto</div>
+                                                            <div className="col-span-1"></div>
+                                                        </div>
+                                                        
+                                                        {/* Wiersze tabeli */}
+                                                        <div className="space-y-2">
+                                                            {product.quantityTiers.map((tier) => (
+                                                                <div key={tier.id} className="grid grid-cols-12 gap-2 items-center bg-white p-3 rounded">
+                                                                    <div className="col-span-3">
+                                                                        <input
+                                                                            type="number"
+                                                                            value={tier.quantity}
+                                                                            onChange={(e) => updateQuantityTier(product.id, tier.id, 'quantity', e.target.value)}
+                                                                            placeholder="Ilość"
+                                                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-sm"
+                                                                        />
+                                                                    </div>
+                                                                    <div className="col-span-2">
+                                                                        <div className="flex items-center gap-1">
+                                                                            <input
+                                                                                type="number"
+                                                                                step="1"
+                                                                                min="0"
+                                                                                max="99"
+                                                                                value={tier.margin}
+                                                                                onChange={(e) => updateQuantityTier(product.id, tier.id, 'margin', e.target.value)}
+                                                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-sm"
+                                                                            />
+                                                                            <span className="text-sm text-gray-600">%</span>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="col-span-3">
+                                                                        {tier.quantity && (
+                                                                            <span className="text-sm font-semibold text-gray-800">
+                                                                                {formatCurrency(calculateTierResults(product, tier).pricePerUnit)} zł
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="col-span-3">
+                                                                        {tier.quantity && (
+                                                                            <span className="text-sm font-bold text-green-600">
+                                                                                {formatCurrency(calculateTierResults(product, tier).sellingPrice)} zł
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="col-span-1 flex justify-end">
+                                                                        {product.quantityTiers.length > 1 && (
+                                                                            <button
+                                                                                onClick={() => removeQuantityTier(product.id, tier.id)}
+                                                                                className="text-red-500 hover:text-red-700 p-1"
+                                                                            >
+                                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                                                </svg>
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Docelowa marża (%)</label>
+                                                        <input type="number" step="1" min="0" max="99" value={product.targetMargin} onChange={(e) => updateProduct(product.id, 'targetMargin', e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                                                        <div className="flex gap-2 mt-2 flex-wrap">
+                                                            {presetMargins.map(preset => (
+                                                                <button
+                                                                    key={preset.label}
+                                                                    onClick={() => updateProduct(product.id, 'targetMargin', preset.value)}
+                                                                    className="text-xs px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full hover:bg-indigo-200 transition-colors"
+                                                                >
+                                                                    {preset.label} {preset.value > 0 && `(${preset.value}%)`}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
 
-                                            {results.totalCost > 0 && (
-                                                <div className="bg-white rounded-lg p-4 border-2 border-indigo-200">
-                                                    <h4 className="font-semibold text-gray-700 mb-3">Wyniki obliczeń:</h4>
+                                            {/* Kalkulacja cenowa - UPROSZCZONA */}
+                                            {results.totalCost > 0 && !product.useQuantityTiers && (
+                                                <div className="bg-white rounded-lg p-4 border-2 border-indigo-200 mt-4">
+                                                    <h4 className="font-semibold text-gray-700 mb-3">Kalkulacja cenowa</h4>
                                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                                                         <div>
                                                             <div className="text-xs text-gray-600 mb-1">Koszty całkowite</div>
-                                                            <div className="text-xl font-bold text-gray-800">
-                                                                {results.totalCost.toFixed(2)} zł
-                                                            </div>
+                                                            <div className="text-xl font-bold text-gray-800">{formatCurrency(results.totalCost)} zł</div>
                                                         </div>
-                                                        <div>
-                                                            <div className="text-xs text-gray-600 mb-1">Cena sprzedaży</div>
-                                                            <div className="text-xl font-bold text-green-600">
-                                                                {results.sellingPrice.toFixed(2)} zł
+                                                        {product.useUnitPrice && results.quantity > 1 && (
+                                                            <div>
+                                                                <div className="text-xs text-gray-600 mb-1">Cena za 1 szt.</div>
+                                                                <div className="text-xl font-bold text-gray-800">{formatCurrency(results.pricePerUnit)} zł</div>
                                                             </div>
+                                                        )}
+                                                        <div>
+                                                            <div className="text-xs text-gray-600 mb-1">Wartość całkowita netto</div>
+                                                            <div className="text-xl font-bold text-green-600">{formatCurrency(results.sellingPrice)} zł</div>
                                                         </div>
                                                         <div>
                                                             <div className="text-xs text-gray-600 mb-1">Zysk</div>
-                                                            <div className="text-xl font-bold text-indigo-600">
-                                                                {results.profit.toFixed(2)} zł
-                                                            </div>
-                                                        </div>
-                                                        <div>
-                                                            <div className="text-xs text-gray-600 mb-1">Mnożnik</div>
-                                                            <div className="text-lg font-semibold text-gray-700">
-                                                                {results.multiplier.toFixed(2)}x
-                                                            </div>
-                                                        </div>
-                                                        <div>
-                                                            <div className="text-xs text-gray-600 mb-1">Narzut</div>
-                                                            <div className="text-lg font-semibold text-gray-700">
-                                                                {results.markup.toFixed(2)}%
-                                                            </div>
-                                                        </div>
-                                                        <div>
-                                                            <div className="text-xs text-gray-600 mb-1">Marża rzeczywista</div>
-                                                            <div className="text-lg font-semibold text-indigo-600">
-                                                                {product.targetMargin}%
-                                                            </div>
+                                                            <div className="text-xl font-bold text-indigo-600">{formatCurrency(results.profit)} zł</div>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -298,6 +1229,32 @@
                                 })}
                             </div>
 
+                            {/* Podsumowanie całości (UPROSZCZONE) */}
+                            {calculateSummary().validProducts > 0 && (
+                                <div className="mt-6 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl p-6 border-2 border-indigo-300">
+                                    <h3 className="text-xl font-bold text-gray-800 mb-4">📊 Podsumowanie oferty</h3>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                        <div className="bg-white rounded-lg p-4 shadow-sm">
+                                            <div className="text-xs text-gray-600 mb-1">Liczba produktów</div>
+                                            <div className="text-2xl font-bold text-indigo-600">{calculateSummary().validProducts}</div>
+                                        </div>
+                                        <div className="bg-white rounded-lg p-4 shadow-sm">
+                                            <div className="text-xs text-gray-600 mb-1">Koszty całkowite</div>
+                                            <div className="text-2xl font-bold text-gray-800">{formatCurrency(calculateSummary().totalCost)} zł</div>
+                                        </div>
+                                        <div className="bg-white rounded-lg p-4 shadow-sm">
+                                            <div className="text-xs text-gray-600 mb-1">Wartość sprzedaży netto</div>
+                                            <div className="text-2xl font-bold text-green-600">{formatCurrency(calculateSummary().totalSellingPrice)} zł</div>
+                                        </div>
+                                        <div className="bg-white rounded-lg p-4 shadow-sm">
+                                            <div className="text-xs text-gray-600 mb-1">Średnia marża</div>
+                                            <div className="text-2xl font-bold text-indigo-600">{formatCurrency(calculateSummary().averageMargin)}%</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Przyciski akcji */}
                             <div className="flex flex-col sm:flex-row gap-3 mt-6">
                                 <button
                                     onClick={addProduct}
@@ -315,29 +1272,144 @@
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                     </svg>
-                                    Eksportuj do CSV (Excel)
+                                    Eksportuj CSV
+                                </button>
+                                <button
+                                    onClick={() => setShowOfferSettings(!showOfferSettings)}
+                                    className="flex items-center justify-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    {showOfferSettings ? 'Ukryj ustawienia' : 'Generuj ofertę PDF'}
                                 </button>
                             </div>
 
+                            {/* Panel ustawień oferty */}
+                            {showOfferSettings && (
+                                <div className="mt-6 bg-purple-50 border-2 border-purple-300 rounded-xl p-6">
+                                    <h3 className="text-lg font-bold text-gray-800 mb-4">⚙️ Ustawienia oferty PDF</h3>
+                                    <div className="grid md:grid-cols-2 gap-4 mb-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Nazwa firmy</label>
+                                            <input type="text" value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="np. BAS Kreacja" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Adres firmy</label>
+                                            <input type="text" value={companyAddress} onChange={(e) => setCompanyAddress(e.target.value)} placeholder="ul. Przykładowa 1, 00-000 Warszawa" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Telefon</label>
+                                            <input type="text" value={companyPhone} onChange={(e) => setCompanyPhone(e.target.value)} placeholder="+48 123 456 789" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                                            <input type="email" value={companyEmail} onChange={(e) => setCompanyEmail(e.target.value)} placeholder="kontakt@firma.pl" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Nazwa klienta</label>
+                                            <input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="np. ABC Sp. z o.o." className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Logo firmy</label>
+                                            <input type="file" accept="image/*" onChange={(e) => handleLogoUpload(e.target.files[0])} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" />
+                                            {companyLogoPreview && <div className="mt-2"><img src={companyLogoPreview} alt="Logo" className="h-16 w-auto rounded-lg border-2 border-purple-200" /></div>}
+                                        </div>
+                                    </div>
+                                    <div className="mb-4">
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input type="checkbox" checked={includeDeliveryTime} onChange={(e) => setIncludeDeliveryTime(e.target.checked)} className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500" />
+                                            <span className="text-sm font-medium text-gray-700">Dodaj orientacyjny czas realizacji</span>
+                                        </label>
+                                    </div>
+                                    {includeDeliveryTime && (
+                                        <div className="mb-4">
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Czas realizacji</label>
+                                            <input type="text" value={deliveryTime} onChange={(e) => setDeliveryTime(e.target.value)} placeholder="np. 7-14 dni roboczych" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" />
+                                        </div>
+                                    )}
+                                    
+                                    {/* Przyciski akcji */}
+                                    <div className="grid md:grid-cols-2 gap-3">
+                                        <button
+                                            onClick={() => setShowSaveOfferDialog(true)}
+                                            className="flex items-center justify-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
+                                        >
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                            </svg>
+                                            Pobierz ofertę PDF
+                                        </button>
+                                        <button
+                                            onClick={() => setShowSaveWorkingOfferDialog(true)}
+                                            className="flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                                        >
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                                            </svg>
+                                            Zapisz ofertę roboczą
+                                        </button>
+                                    </div>
+                                    
+                                    {/* Link do ofert roboczych */}
+                                    <button
+                                        onClick={() => setShowSavedConfigs(!showSavedConfigs)}
+                                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm border border-gray-300"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+                                        </svg>
+                                        {showSavedConfigs ? 'Ukryj' : 'Pokaż'} zapisane oferty robocze ({savedConfigurations.length})
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Panel zapisanych ofert roboczych */}
+                            {showSavedConfigs && (
+                                <div className="mb-6 bg-gray-50 rounded-xl p-4 border-2 border-gray-200">
+                                    <h3 className="text-lg font-bold text-gray-800 mb-3">📁 Zapisane oferty robocze</h3>
+                                    {savedConfigurations.length === 0 ? (
+                                        <p className="text-gray-600 text-center py-4">Brak zapisanych ofert roboczych</p>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {savedConfigurations.map(config => (
+                                                <div key={config.id} className="bg-white p-3 rounded-lg border border-gray-200 flex items-center justify-between">
+                                                    <div>
+                                                        <p className="font-medium text-gray-800">{config.configName || config.clientName}</p>
+                                                        <p className="text-xs text-gray-500">
+                                                            {config.clientName && config.clientName !== config.configName && `Klient: ${config.clientName} • `}
+                                                            {new Date(config.date).toLocaleString('pl-PL')} • {config.products.length} produktów
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={() => loadConfiguration(config)}
+                                                            className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+                                                        >
+                                                            Wczytaj
+                                                        </button>
+                                                        <button
+                                                            onClick={() => deleteConfiguration(config.id)}
+                                                            className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
+                                                        >
+                                                            Usuń
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Wskazówki dla handlowców */}
                             <div className="mt-8 pt-6 border-t border-gray-200">
-                                <h3 className="font-semibold text-gray-700 mb-3">Wskazówki dla handlowców:</h3>
+                                <h3 className="font-semibold text-gray-700 mb-3">💡 Wskazówki dla handlowców:</h3>
                                 <ul className="space-y-2 text-sm text-gray-600">
-                                    <li className="flex gap-2">
-                                        <span className="text-indigo-600 font-bold">•</span>
-                                        <span>Gadżety reklamowe: celuj w marżę 30-40% (mnożnik 1.43-1.67)</span>
-                                    </li>
-                                    <li className="flex gap-2">
-                                        <span className="text-indigo-600 font-bold">•</span>
-                                        <span>Produkty premium: 50% marży (mnożnik 2.0)</span>
-                                    </li>
-                                    <li className="flex gap-2">
-                                        <span className="text-indigo-600 font-bold">•</span>
-                                        <span>Odzież firmowa: 40% marży (mnożnik 1.67)</span>
-                                    </li>
-                                    <li className="flex gap-2">
-                                        <span className="text-indigo-600 font-bold">•</span>
-                                        <span>Przy dużych zamówieniach B2B dostosuj cenę dynamicznie w zależności od spadku kosztów jednostkowych</span>
-                                    </li>
+                                    <li className="flex gap-2"><span className="text-indigo-600 font-bold">•</span><span>Gadżety reklamowe: celuj w marżę 30-35%</span></li>
+                                    <li className="flex gap-2"><span className="text-indigo-600 font-bold">•</span><span>Produkty premium: marża 40-50%</span></li>
+                                    <li className="flex gap-2"><span className="text-indigo-600 font-bold">•</span><span>Odzież firmowa: marża 32-40%</span></li>
+                                    <li className="flex gap-2"><span className="text-indigo-600 font-bold">•</span><span>Zapisuj konfiguracje dla stałych klientów</span></li>
                                 </ul>
                             </div>
                         </div>
